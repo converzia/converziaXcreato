@@ -83,344 +83,300 @@ def scrape_website_info(website_url):
     except Exception as e:
         return "", ""
 
+def deep_scrape_website_info(website_url):
+    """Scrape and analyze website for deep personalization."""
+    try:
+        resp = requests.get(website_url, timeout=10)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        title = soup.title.string.strip() if soup.title else ""
+        meta_desc = ""
+        desc_tag = soup.find("meta", attrs={"name": "description"})
+        if desc_tag and desc_tag.get("content"):
+            meta_desc = desc_tag["content"].strip()
+        # Headlines
+        h1 = [h.get_text(strip=True) for h in soup.find_all("h1")]
+        h2 = [h.get_text(strip=True) for h in soup.find_all("h2")]
+        h3 = [h.get_text(strip=True) for h in soup.find_all("h3")]
+        # Meta tags
+        meta_keywords = ""
+        kw_tag = soup.find("meta", attrs={"name": "keywords"})
+        if kw_tag and kw_tag.get("content"):
+            meta_keywords = kw_tag["content"].strip()
+        og_title = soup.find("meta", property="og:title")
+        og_desc = soup.find("meta", property="og:description")
+        og_title = og_title["content"].strip() if og_title and og_title.get("content") else ""
+        og_desc = og_desc["content"].strip() if og_desc and og_desc.get("content") else ""
+        # Navigation/menu
+        nav = [a.get_text(strip=True) for a in soup.find_all("a") if a.get("href") and len(a.get_text(strip=True)) > 2]
+        nav = list(dict.fromkeys(nav))  # deduplicate
+        # Main visible text (first 1000 chars)
+        main_text = " ".join([p.get_text(strip=True) for p in soup.find_all("p")])
+        main_text = main_text[:1000]
+        # Testimonials (look for blocks with "testimonial", "review", etc.)
+        testimonials = []
+        for div in soup.find_all(["div", "section"], class_=lambda x: x and "testimonial" in x.lower()):
+            testimonials.append(div.get_text(strip=True))
+        # Blog/news headlines
+        blog_headlines = [h.get_text(strip=True) for h in soup.find_all(["h2", "h3"]) if "blog" in h.get_text(strip=True).lower() or "news" in h.get_text(strip=True).lower()]
+        # Social links
+        social_links = [a["href"] for a in soup.find_all("a", href=True) if any(s in a["href"] for s in ["facebook", "linkedin", "twitter", "instagram"])]
+        # Build summary
+        summary = {
+            "title": title,
+            "meta_desc": meta_desc,
+            "meta_keywords": meta_keywords,
+            "og_title": og_title,
+            "og_desc": og_desc,
+            "h1": h1,
+            "h2": h2,
+            "h3": h3,
+            "nav": nav,
+            "main_text": main_text,
+            "testimonials": testimonials,
+            "blog_headlines": blog_headlines,
+            "social_links": social_links,
+        }
+        return summary
+    except Exception as e:
+        return {}
+
 # ----------------------------
 # ✍️ Email Generation
 # ----------------------------
-def generate_email(company, website, keywords, recipient_name=None):
-    # Now this works!
-    title, meta_desc = scrape_website_info(website)
-    website_info = f"Website Title: {title}\nMeta Description: {meta_desc}" if (title or meta_desc) else "No website info found."
-
-    # --- Detect if company is in Australia/Sydney ---
-    def is_australian_company(website, meta_desc, title, company):
-        # Check for .au domain or keywords in meta/title/company
-        if website and ".au" in website.lower():
-            return True
-        for text in [meta_desc, title, company]:
-            if text and any(loc in text.lower() for loc in ["australia", "sydney", "nsw", "melbourne", "brisbane", "perth", "adelaide"]):
-                return True
-        return False
-
-    def is_sydney_company(website, meta_desc, title, company):
-        # Check for "sydney" in any field
-        for text in [website, meta_desc, title, company]:
-            if text and "sydney" in text.lower():
-                return True
-        return False
-
-    australian = is_australian_company(website, meta_desc, title, company)
-    sydney = is_sydney_company(website, meta_desc, title, company)
-
-    # Improved subject line prompt using awareness-stage examples for inspiration
-    prompt = f"""
-You are the world's most ingenious, psychologically-savvy, and results-obsessed B2B cold email copywriter and prompt engineer with 20+ years of experience. Your mission: craft the single most curiosity-inducing, humanized, quick-to-read, and irresistible cold email ever written for Creato—a multi-award-winning Sydney-based design agency trusted by major Australian and global brands.
-
-========================
-ULTIMATE OUTCOME
-========================
-Your email must guarantee a 100% open rate and a 100% reply rate—no exceptions. The subject line MUST be so compelling, so hyper-personalized, and so emotionally resonant that every business decision-maker (owners, founders, marketing managers, etc.) in SMBs, startups, and established companies across industries (real estate, construction, law, healthcare, government, etc.) feels an overwhelming urge to open, read, and reply—immediately. This is not just another cold email; it is the ONLY message in their inbox that they remember, forward, and respond to. The reader must feel this email was written just for them, at this moment, for this reason.
-
-========================
-ABOUT CREATO (for context & inspiration)
-========================
-- Creato is an award-winning Sydney-based design agency, established in 2015.
-- Trusted by University of Sydney, Dell, IGA, WHO, MSD Pharmaceuticals, Hilti, NSW Government, Menulog, Repco, Aldi, Johnson & Johnson, Ray White, Taubmans, and more.
-- 5.0 Google rating, 43+ glowing reviews, 100% customer satisfaction.
-- Owner & Creative Director: Callum Humphreys.
-- Services: Logo Design, Web Design & Development, Graphic Design, Social Media Content Creation.
-- 100% Satisfaction Guarantee: Unlimited revisions.
-- Full Copyright Ownership: No ongoing licensing or fees.
-- Fast Turnaround: 72-hour delivery on most tasks.
-- Transparent Pricing: No hidden fees.
-- Modern, clever designs that help clients outshine their competition.
-- Case studies: MBA, Wind & Vibes, Hilti, Sydney Business Park, Alpha Financials, Sevigne.
-- Testimonials highlight: “Always goes the extra mile”, “Seamless experience”, “Exceeded expectations”, “Amazing value for money”, “Highly recommended”.
-
-========================
-YOUR TASK
-========================
-- Write a cold email for Creato targeting business decision-makers (owners, founders, marketing managers, etc.) in SMBs, startups, and established companies across industries (real estate, construction, law, healthcare, government, etc.).
-- The subject line **must include the company name** and be so curiosity-driven, so hyper-personalized, and so psychologically irresistible that it achieves a 100% open rate—think like a world-class copy chief, using advanced psychological triggers, open loops, pattern interrupts, and deep personalization.
-- The email body must be ultra-human, deeply empathetic, and feel like a real conversation from a peer who truly understands their business and cares about their success.
-- Use the AIDA method (Attention, Interest, Desire, Action) for the body.
-- The email must be quick to read (max 8 sentences), written in natural, everyday English, and deeply personal—like you genuinely care.
-- The CTA must be so soft, so easy, and so inviting that the recipient feels it would be a pleasure to book a quick chat or request a free quote.
-- Reference real testimonials, case studies, and specific details from Creato’s portfolio or the recipient’s website to prove you’ve done your homework.
-- Make the recipient feel like this is a once-in-a-lifetime opportunity, tailored just for them.
-- **If and only if the client is verified to be in Sydney, mention Sydney early on. If they are in Australia (but not Sydney), mention Australia instead. If they are not in Australia, do not mention Sydney or Australia at all.**
-- **If the client is not in Sydney, make sure to mention their competition or closest competitors if you can find a real name; if not, skip this. Never use placeholders like "XYZ".**
-
-========================
-SUBJECT LINE STRATEGY
-========================
-- The subject line must include the company name ({company}) in a natural, non-spammy way.
-- Make it ultra-specific to the recipient’s website, service, or recent activity.
-- Use open loops to trigger curiosity (e.g., “Brand refresh tip for {company} you might’ve missed”).
-- Add industry-specific language (e.g., "logo impact for {company}", "web design edge for {company}").
-- Experiment with micro-story teasers (e.g., “A quick story about a Sydney brand that doubled leads”).
-- The subject line must create an irresistible open loop, spark intense curiosity, and reference something unique about their business, website, or a recent achievement, challenge, or trend.
-- Use advanced psychological triggers: open loops, pattern interrupts, micro-personalization, FOMO, social proof, and subtle urgency—but never hype or manipulation.
-- Absolutely avoid all generic, salesy, or spammy language. Make it feel like a personal note from a peer, not a vendor.
-- The subject line must be so good that the recipient feels compelled to open immediately, even if they never open cold emails.
-- **You MUST use the most advanced, creative, and proven curiosity triggers.**
-- **Below are 20+ world-class, proven, and highly creative subject line examples. Use these as inspiration, but do NOT copy—adapt the style and intent to the recipient and context. Your subject line must be even better and more irresistible than these:**
-    - "Saw something on {company}’s site—can I share a wild idea?"
-    - "Your brand’s secret edge? (1-min thought inside)"
-    - "Noticed {{unique detail}} at {company}—is anyone else missing this?"
-    - "Quick question about {company}—bet you haven’t heard this before"
-    - "If I were you at {company}, I’d want to know this"
-    - "A micro-idea for {company}—promise it’s not a pitch"
-    - "How {company} could double enquiries this month (no sales pitch)"
-    - "If you only open one email today at {company}, make it this one"
-    - "What {company}’s competitors are missing (quick tip inside)"
-    - "A Sydney story that could change {company}’s next quarter"
-    - "What I’d do if I ran {company} (1-minute idea)"
-    - "A tiny tweak for {company} with big results"
-    - "Your website caught my eye—here’s why ({company})"
-    - "A quick win for {company}—mind if I share?"
-    - "What {company} can teach the industry (quick thought)"
-    - "A design secret for {company} (from Sydney’s best)"
-    - "What {company}’s next big move could be"
-    - "A fresh perspective for {company}—no strings attached"
-    - "Noticed something on {company}’s homepage—worth a look?"
-    - "A creative shortcut for {company} (1-min read)"
-    - "What {company}’s clients are really thinking"
-    - "A Sydney client’s story that reminded me of {company}"
-    - "A quick question about {company}’s growth"
-    - "What {company} could try this month (no pitch)"
-    - "A small idea for {company}—could be a game changer"
-    - "What {company}’s next award could be for"
-    - "A design tip for {company}—straight from the pros"
-    - "What {company}’s competitors wish they knew"
-    - "A story about {company} I had to share"
-    - "What’s next for {company}? (quick idea inside)"
-    - "A Sydney insight for {company}—worth 30 seconds?"
-    - "What {company} could do differently (no sales pitch)"
-    - "A quick fix for {company}’s website (saw this today)"
-    - "What {company}’s brand could unlock next"
-    - "A creative spark for {company}—from a fellow builder"
-    - "What {company}’s next client will notice"
-    - "A design shortcut for {company}—mind if I share?"
-    - "What {company} could try before the quarter ends"
-    - "A Sydney story for {company}—quick read"
-    - "What {company}’s team might love to see"
-    - "A micro-idea for {company}—no pitch, just value"
-    - "What {company} could do to stand out this month"
-    - "A quick win for {company}—saw this on your site"
-    - "What {company}’s next step could look like"
-    - "A creative idea for {company}—from Sydney’s best"
-    - "What {company} could do to outshine the competition"
-    - "A story about {company}—had to reach out"
-    - "What {company}’s next big win could be"
-    - "A design tip for {company}—from a Sydney creative"
-    - "What {company} could try for instant impact"
-    - "A quick thought for {company}—worth a look?"
-    - "What {company}’s clients are saying (and why it matters)"
-    - "A Sydney perspective for {company}—1-min read"
-    - "What {company} could do with a fresh look"
-    - "A creative shortcut for {company}—no pitch"
-    - "What {company}’s next client will notice"
-    - "A micro-idea for {company}—promise it’s not a pitch"
-    - "What {company} could try before the quarter ends"
-    - "A Sydney story for {company}—quick read"
-    - "What {company}’s team might love to see"
-    - "A quick win for {company}—saw this on your site"
-    - "What {company}’s next step could look like"
-    - "A creative idea for {company}—from Sydney’s best"
-    - "What {company} could do to outshine the competition"
-    - "A story about {company}—had to reach out"
-    - "What {company}’s next big win could be"
-    - "A design tip for {company}—from a Sydney creative"
-    - "What {company} could try for instant impact"
-    - "A quick thought for {company}—worth a look?"
-    - "What {company}’s clients are saying (and why it matters)"
-    - "A Sydney perspective for {company}—1-min read"
-    - "What {company} could do with a fresh look"
-    - "A creative shortcut for {company}—no pitch"
-    - "What {company}’s next client will notice"
-    - "A micro-idea for {company}—promise it’s not a pitch"
-    - "What {company} could try before the quarter ends"
-    - "A Sydney story for {company}—quick read"
-    - "What {company}’s team might love to see"
-    - "A quick win for {company}—saw this on your site"
-    - "What {company}’s next step could look like"
-    - "A creative idea for {company}—from Sydney’s best"
-    - "What {company} could do to outshine the competition"
-    - "A story about {company}—had to reach out"
-    - "What {company}’s next big win could be"
-    - "A design tip for {company}—from a Sydney creative"
-    - "What {company} could try for instant impact"
-    - "A quick thought for {company}—worth a look?"
-    - "What {company}’s clients are saying (and why it matters)"
-    - "A Sydney perspective for {company}—1-min read"
-    - "What {company} could do with a fresh look"
-    - "A creative shortcut for {company}—no pitch"
-    - "What {company}’s next client will notice"
-    - "A micro-idea for {company}—promise it’s not a pitch"
-    - "What {company} could try before the quarter ends"
-    - "A Sydney story for {company}—quick read"
-    - "What {company}’s team might love to see"
-    - "A quick win for {company}—saw this on your site"
-    - "What {company}’s next step could look like"
-    - "A creative idea for {company}—from Sydney’s best"
-    - "What {company} could do to outshine the competition"
-    - "A story about {company}—had to reach out"
-    - "What {company}’s next big win could be"
-    - "A design tip for {company}—from a Sydney creative"
-    - "What {company} could try for instant impact"
-    - "A quick thought for {company}—worth a look?"
-    - "What {company}’s clients are saying (and why it matters)"
-    - "A Sydney perspective for {company}—1-min read"
-    - "What {company} could do with a fresh look"
-    - "A creative shortcut for {company}—no pitch"
-    - "What {company}’s next client will notice"
-    - "A micro-idea for {company}—promise it’s not a pitch"
-    - "What {company} could try before the quarter ends"
-    - "A Sydney story for {company}—quick read"
-    - "What {company}’s team might love to see"
-    - "A quick win for {company}—saw this on your site"
-    - "What {company}’s next step could look like"
-    - "A creative idea for {company}—from Sydney’s best"
-    - "What {company} could do to outshine the competition"
-    - "A story about {company}—had to reach out"
-    - "What {company}’s next big win could be"
-    - "A design tip for {company}—from a Sydney creative"
-    - "What {company} could try for instant impact"
-    - "A quick thought for {company}—worth a look?"
-    - "What {company}’s clients are saying (and why it matters)"
-    - "A Sydney perspective for {company}—1-min read"
-    - "What {company} could do with a fresh look"
-    - "A creative shortcut for {company}—no pitch"
-    - "What {company}’s next client will notice"
-    - "A micro-idea for {company}—promise it’s not a pitch"
-    - "What {company} could try before the quarter ends"
-    - "A Sydney story for {company}—quick read"
-    - "What {company}’s team might love to see"
-    - "A quick win for {company}—saw this on your site"
-    - "What {company}’s next step could look like"
-    - "A creative idea for {company}—from Sydney’s best"
-    - "What {company} could do to outshine the competition"
-    - "A story about {company}—had to reach out"
-    - "What {company}’s next big win could be"
-    - "A design tip for {company}—from a Sydney creative"
-    - "What {company} could try for instant impact"
-    - "A quick thought for {company}—worth a look?"
-    - "What {company}’s clients are saying (and why it matters)"
-    - "A Sydney perspective for {company}—1-min read"
-    - "What {company} could do with a fresh look"
-    - "A creative shortcut for {company}—no pitch"
-    - "What {company}’s next client will notice"
-    - "A micro-idea for {company}—promise it’s not a pitch"
-    - "What {company} could try before the quarter ends"
-    - "A Sydney story for {company}—quick read"
-    - "What {company}’s team might love to see"
-    - "A quick win for {company}—saw this on your site"
-    - "What {company}’s next step could look like"
-    - "A creative idea for {company}—from Sydney’s best"
-    - "What {company} could do to outshine the competition"
-    - "A story about {company}—had to reach out"
-    - "What {company}’s next big win could be"
-    - "A design tip for {company}—from a Sydney creative"
-    - "What {company} could try for instant impact"
-    - "A quick thought for {company}—worth a look?"
-
-========================
-EMAIL BODY STRATEGY (AIDA)
-========================
-- **Attention (First Line):**
-    - Give a very specific compliment—reference their homepage, a testimonial, a client, or a unique detail from their website.
-    - Show you actually explored their site—e.g., “I saw you helped ABC Realty boost listings by 32%.”
-    - Use elements like homepage header, taglines, latest blog headlines, testimonials, or recent client results.
-    - **If and only if the client is verified to be in Sydney, mention Sydney early on. If they are in Australia (but not Sydney), mention Australia instead. If they are not in Australia, do not mention Sydney or Australia at all.**
-    - **If the client is not in Sydney, make sure to mention their competition or closest competitors if you can find a real name; if not, skip this. Never use placeholders like "XYZ".**
-- **Interest (Pain/Challenge):**
-    - Identify a pain point unique to their industry (real estate, construction, law, healthcare, etc.).
-    - Use micro-insights: “You’re doing amazing work, but your case study headlines don’t sell the value you delivered.”
-    - Reference a recent trend, news, or shift in their industry that’s relevant to their business.
-- **Desire (How Creato Helps):**
-    - Tailor Creato’s value prop by niche.
-    - Use vivid metaphors or analogies: “Creato is like your creative director, strategist, and design team rolled into one.”
-    - Add mini case-study-style examples: “One client saw a 3.2x increase in leads after a web refresh.”
-    - Emphasize the feeling (relief, clarity, connection)—not just the function.
-    - Reference real testimonials or case studies for proof.
-- **Action (Call-To-Action):**
-    - Make it feel like a tailored offer, not a standard pitch.
-    - Instead of “Would you be open to a quick chat?” try:
-        → “Happy to send you some ideas for {company}—no strings attached?”
-    - Use curiosity + ease: “Want to see what a fresh logo or website could do for your brand?”
-    - End warm and human: “No pressure, just thought it might be fun to explore.”
-    - Add rejection-safe endings: “If you’re not the right person, feel free to point me in the right direction.”
-
-========================
-DELIVERY & FORMATTING RULES
-========================
-- Do NOT include any opt-out language or legal disclaimers.
-- Keep sentences short and snappy—no more than 2 lines per paragraph.
-- Use max 6–8 sentences in total.
-- Use white space generously to make the email scannable.
-- Never say “agency” in a robotic way—frame Creato as a partner, creative ally, or brand builder.
-- Avoid all buzzwords, jargon, or technical language.
-- Make the email feel like it was written by someone who truly cares about their success.
-- Reference a shared value, goal, or challenge if possible.
-- The email should feel like the start of a partnership, not a transaction.
-- If you use a statistic or fact, make sure it’s relevant and adds value.
-- The subject line and first sentence should work together to create curiosity and relevance.
-- The email should be so good that the recipient wants to forward it to a colleague.
-- If you can, include a “micro-offer” (e.g., a quick tip, resource, or idea) that adds value even if they don’t reply.
-- The email should feel like a breath of fresh air compared to the usual cold outreach.
-- If you reference a competitor, do so respectfully and only if it adds value.
-- The email should be timeless—relevant today and in the future.
-- If you use a metaphor or analogy, make it vivid and memorable.
-- The email should feel like a conversation starter, not a monologue.
-- If you can, reference a recent achievement, milestone, or news about their company.
-- The email should be so personalized that it couldn’t be sent to anyone else.
-- If you use humor, make sure it’s subtle and appropriate.
-- The email should feel like a handwritten note, not a mass email.
-- If you reference a pain point, make it specific and empathetic.
-- The email should be so good that the recipient wants to reply, even if just to say thank you.
-- If you use a call-to-action, make it easy to say yes to.
-- The email should feel like a favor, not a request.
-- If you can, reference a mutual connection, interest, or value.
-- The email should be so well-written that it stands out in their inbox.
-- If you use a compliment, make it specific and genuine.
-- The email should feel like the beginning of a valuable relationship.
-- If you reference a challenge, make it one that only someone who understands their business would know.
-- The email should be so relevant that the recipient feels compelled to respond.
-- If you use a story, make it short, relevant, and memorable.
-- The email should feel like it was written just for them, at this moment, for this reason.
-- If you use a statistic, make it surprising and relevant.
-- The email should be so good that the recipient wants to keep it for future reference.
-- If you use a question, make it one that sparks curiosity and conversation.
-- The email should feel like a conversation between equals.
-- If you reference a goal, make it one that’s important to them.
-- The email should be so helpful that the recipient feels grateful.
-- If you use a resource, make it relevant and valuable.
-- The email should feel like a gift, not a pitch.
-- If you reference a trend, make it one that’s relevant to their business.
-- The email should be so good that the recipient wants to share it with their team.
-- If you use a CTA, make it feel like an invitation, not an obligation.
-- The email should feel like the start of a partnership, not a transaction.
-- If you can, add a “micro-offer” or insight that makes the email valuable even if they never reply.
-- The email must be so good, so specific, and so relevant that the recipient feels it was written just for them, at this moment, for this reason—and they feel compelled to open, read, and reply.
-
-========================
-INPUTS
-========================
-Company: {company}
-Website: {website}
-Keywords: {keywords}
-Website Info (scraped): {website_info}
-Australian: {australian}
-Sydney: {sydney}
-
-========================
-EMAIL FORMAT
-========================
-Subject: <short, ultra-personalized, curiosity-driven subject that includes the company name and is absolutely impossible to ignore or not open>
-Body:
-
-<the full, properly formatted email body as described above, with no outline or bullet points, and no emojis, and signed off as Callum>
+def generate_email(company, website, keywords, recipient_name=None, city=None, state=None, country=None, tone="friendly"):
+    website_data = deep_scrape_website_info(website)
+    # If minimal data, use fallback prompt
+    if not website_data or not any([website_data.get("title"), website_data.get("h1"), website_data.get("main_text")]):
+        prompt = f"""
+Write a radically short, curiosity-driven cold email for Creato to {company}. 
+Location: {city}, {state}, {country}. 
+Tone: {tone}.
+Mention Creato's Sydney/Australia base if relevant. 
+Max 4 sentences. 
+Sign as Callum.
 """
+    else:
+        # --- Analyze scraped data for hyper-personalization ---
+        analysis_lines = []
+        if website_data.get("title"):
+            analysis_lines.append(f"- The website title suggests a focus on: '{website_data['title']}'")
+        if website_data.get("meta_desc"):
+            analysis_lines.append(f"- Meta description highlights: '{website_data['meta_desc']}'")
+        if website_data.get("h1"):
+            analysis_lines.append(f"- Main headlines (h1): {website_data['h1']}")
+        if website_data.get("h2"):
+            analysis_lines.append(f"- Section headlines (h2): {website_data['h2']}")
+        if website_data.get("h3"):
+            analysis_lines.append(f"- Subsection headlines (h3): {website_data['h3']}")
+        if website_data.get("testimonials"):
+            analysis_lines.append(f"- Testimonials found: {website_data['testimonials']}")
+        if website_data.get("blog_headlines"):
+            analysis_lines.append(f"- Blog/news headlines: {website_data['blog_headlines']}")
+        if website_data.get("nav"):
+            analysis_lines.append(f"- Navigation/menu items: {website_data['nav']}")
+        if website_data.get("main_text"):
+            analysis_lines.append(f"- Main visible text sample: '{website_data['main_text'][:120]}...'")
+        if website_data.get("social_links"):
+            analysis_lines.append(f"- Social links detected: {website_data['social_links']}")
+        if not analysis_lines:
+            analysis_lines.append("- No significant website data could be extracted.")
+
+        website_analysis = "\n".join(analysis_lines)
+
+        # --- Detect if company is in Australia/Sydney using sheet data if available ---
+        def is_australian_company(city, state, country, website, meta_desc, title, company):
+            if country and country.lower() == "australia":
+                return True
+            if website and ".au" in website.lower():
+                return True
+            for text in [meta_desc, title, company, city, state]:
+                if text and any(loc in text.lower() for loc in ["australia", "sydney", "nsw", "melbourne", "brisbane", "perth", "adelaide"]):
+                    return True
+            return False
+
+        def is_sydney_company(city, state, country, website, meta_desc, title, company):
+            if city and city.lower() == "sydney":
+                return True
+            for text in [website, meta_desc, title, company, city, state]:
+                if text and "sydney" in (text or "").lower():
+                    return True
+            return False
+
+        australian = is_australian_company(city, state, country, website, website_data.get('meta_desc'), website_data.get('title'), company)
+        sydney = is_sydney_company(city, state, country, website, website_data.get('meta_desc'), website_data.get('title'), company)
+
+        # --- Industry-specific benefit messaging ---
+        industry_benefits = {
+            "real estate": "stand out in crowded listings",
+            "law": "build instant trust with clients",
+            "healthcare": "showcase credibility and care",
+            # ...etc
+        }
+        benefit = industry_benefits.get(keywords.lower(), "")
+
+        # Compose prompt for LLM, integrating scraped data, explicit analysis, and sheet location info
+        prompt = f"""
+    You are the world's most advanced, psychologically-astute, and results-obsessed B2B cold email copywriter and prompt engineer with 20+ years of experience. Your mission: craft the single most curiosity-inducing, hyper-personalized, and irresistible cold email ever written for Creato—a multi-award-winning Sydney-based design partner trusted by major Australian and global brands.
+
+    ========================
+    WEBSITE DATA ANALYSIS (for hyper-personalization)
+    ========================
+    Analyze the following real, scraped data from the recipient's website and use these insights to make your email radically specific and hyper-personalized. Reference these details directly in your email, especially in the first line and subject line.
+
+    {website_analysis}
+
+    ========================
+    LEAD LOCATION DATA (from sheet)
+    ========================
+    City: {city}
+    State: {state}
+    Country: {country}
+    # Use this location data to further personalize the email. If the client is in Sydney, mention Sydney early on. If in Australia (but not Sydney), mention Australia early on. If not in Australia, do not mention Sydney or Australia at all. Use this sheet data for accurate location context.
+
+    ========================
+    ULTIMATE OUTCOME
+    ========================
+    Your email must guarantee a 100% open rate and a 100% reply rate—no exceptions. The subject line MUST be so compelling, so hyper-personalized, and so emotionally resonant that every business decision-maker (owners, founders, marketing managers, etc.) in SMBs, startups, and established companies across industries (real estate, construction, law, healthcare, government, etc.) feels an overwhelming urge to open, read, and reply—immediately. This is not just another cold email; it is the ONLY message in their inbox that they remember, forward, and respond to. The reader must feel this email was written just for them, at this moment, for this reason.
+
+    ========================
+    ABOUT CREATO (for context & inspiration)
+    ========================
+    - Creato is an award-winning Sydney-based design partner, established in 2015.
+    - Trusted by University of Sydney, Dell, IGA, WHO, MSD Pharmaceuticals, Hilti, NSW Government, Menulog, Repco, Aldi, Johnson & Johnson, Ray White, Taubmans, and more.
+    - 5.0 Google rating, 43+ glowing reviews, 100% customer satisfaction.
+    - Owner & Creative Director: Callum Humphreys.
+    - Services: Logo Design, Web Design & Development, Graphic Design, Social Media Content Creation.
+    - 100% Satisfaction Guarantee: Unlimited revisions.
+    - Full Copyright Ownership: No ongoing licensing or fees.
+    - Fast Turnaround: 72-hour delivery on most tasks.
+    - Transparent Pricing: No hidden fees.
+    - Modern, clever designs that help clients outshine their competition.
+    - Case studies: MBA, Wind & Vibes, Hilti, Sydney Business Park, Alpha Financials, Sevigne.
+    - Testimonials highlight: “Always goes the extra mile”, “Seamless experience”, “Exceeded expectations”, “Amazing value for money”, “Highly recommended”.
+
+    ========================
+    YOUR TASK
+    ========================
+    - Write a cold email for Creato targeting business decision-makers (owners, founders, marketing managers, etc.) in SMBs, startups, and established companies across industries (real estate, construction, law, healthcare, government, etc.).
+    - The subject line **must include the company name** and be so curiosity-driven, so hyper-personalized, and so psychologically irresistible that it achieves a 100% open rate—think like a world-class copy chief, using advanced psychological triggers, open loops, pattern interrupts, and deep personalization.
+    - The email body must be radically short (max 5 sentences), ultra-personalized, and instantly relevant—no fluff, no generic intros, no filler.
+    - The first line must reference a specific detail from their website (e.g., a homepage headline, a unique service, a recent achievement, or a testimonial) based on the analysis above.
+    - Immediately connect that detail to a relevant value prop from Creato—make it clear you understand their business and what would move the needle for them.
+    - **Mention Sydney early on if the client is in Sydney, or Australia if not. Use the sheet data (City/State/Country) to verify this.**
+    - **If possible, mention their competition or closest competitors in a way that is natural, respectful, and adds value.**
+    - Make the tone conversational, warm, and peer-to-peer—never salesy or robotic.
+    - End with a hyper-personalized micro-offer: "I can give you a quick quote for a {{X}}-page website and list your website pages: {{list of their actual website pages, comma-separated}}. If there are more than 10 pages, just list the most relevant or unique ones."
+    - The CTA must be so easy and inviting that replying feels like a favor to themselves, not to you.
+    - Never use opt-out language, legal disclaimers, or generic closing lines.
+    - Sign off as Callum.
+    - **Make sure you use British English only in the email body.**
+
+    ========================
+    SUPER-PRO PERSONALIZATION STRATEGY
+    ========================
+    - Your email must feel like it could only have been written for this recipient, at this moment, for this reason.
+    - Avoid all generic or templated language. Every line should reference something unique, timely, or contextually relevant to the recipient's business, website, or market.
+    - Use details from the website analysis to craft a first line that is so specific and insightful that it could not possibly be used for any other company.
+    - If you can identify a competitor or a recent move by a competitor (from the website or industry context), mention it in a way that demonstrates deep understanding of the recipient's market landscape.
+    - If the client is in Sydney, mention Sydney in a way that feels natural and relevant to their business or market. If in Australia (but not Sydney), mention Australia early on.
+    - If you use a compliment, make it so specific that it could only apply to this company.
+    - If you use a statistic or insight, make it surprising and directly relevant to the recipient.
+    - The email should read like a peer-to-peer note from someone who has done their homework, not a vendor or marketer.
+
+    ========================
+    SUBJECT LINE STRATEGY
+    ========================
+    - The subject line must include the company name ({company}) in a natural, non-spammy way.
+    - Make it ultra-specific to the recipient’s website, service, or recent activity.
+    - Use open loops to trigger curiosity (e.g., “Brand refresh tip for {company} you might’ve missed”).
+    - Add industry-specific language (e.g., "logo impact for {company}", "web design edge for {company}").
+    - Experiment with micro-story teasers (e.g., “A quick story about a Sydney brand that doubled leads”).
+    - The subject line must create an irresistible open loop, spark intense curiosity, and reference something unique about their business, website, or a recent achievement, challenge, or trend.
+    - Use advanced psychological triggers: open loops, pattern interrupts, micro-personalization, FOMO, social proof, and subtle urgency—but never hype or manipulation.
+    - Absolutely avoid all generic, salesy, or spammy language. Make it feel like a personal note from a peer, not a vendor.
+    - The subject line must be so good that the recipient feels compelled to open immediately, even if they never open cold emails.
+    - **You MUST use the most advanced, creative, and proven curiosity triggers.**
+    - **Below are 20+ world-class, proven, and highly creative subject line examples. Use these as inspiration, but do NOT copy—adapt the style and intent to the recipient and context. Your subject line must be even better and more irresistible than these:**
+        - "Saw something on {company}’s site—can I share a wild idea?"
+        - "Your brand’s secret edge? (1-min thought inside)"
+        - "Noticed {{unique detail}} at {company}—is anyone else missing this?"
+        - "Quick question about {company}—bet you haven’t heard this before"
+        - "If I were you at {company}, I’d want to know this"
+        - "A micro-idea for {company}—promise it’s not a pitch"
+        - "How {company} could double enquiries this month (no sales pitch)"
+        - "If you only open one email today at {company}, make it this one"
+        - "What {company}’s competitors are missing (quick tip inside)"
+        - "A Sydney story that could change {company}’s next quarter"
+        - "What I’d do if I ran {company} (1-minute idea)"
+        - "A tiny tweak for {company} with big results"
+        - "Your website caught my eye—here’s why ({company})"
+        - "A quick win for {company}—mind if I share?"
+        - "What {company} can teach the industry (quick thought)"
+        - "A design secret for {company} (from Sydney’s best)"
+        - "What {company}’s next big move could be"
+        - "A fresh perspective for {company}—no strings attached"
+        - "Noticed something on {company}’s homepage—worth a look?"
+        - "A creative shortcut for {company} (1-min read)"
+        - "What {company}’s clients are really thinking"
+        - "A Sydney client’s story that reminded me of {company}"
+        - "A quick question about {company}’s growth"
+        - "What {company} could try this month (no pitch)"
+        - "A small idea for {company}—could be a game changer"
+        - "What {company}’s next award could be for"
+        - "A design tip for {company}—straight from the pros"
+        - "What {company}’s competitors wish they knew"
+        - "A story about {company} I had to share"
+        - "What’s next for {company}? (quick idea inside)"
+        - "A Sydney insight for {company}—worth 30 seconds?"
+
+    ========================
+    EMAIL BODY STRATEGY (ULTRA-PERSONALIZED, SHORT, ACTIONABLE)
+    ========================
+    - **First Line:** Reference a specific, real detail from their website or business (e.g., homepage headline, unique service, recent achievement, or testimonial) based on the above analysis.
+    - **Second Line:** Connect that detail to a relevant value prop from Creato—show you understand what would move the needle for them.
+    - **Third Line:** Mention Sydney early if the client is in Sydney, or Australia if not. If not in Sydney, and you can identify a real competitor, mention them briefly (never use placeholders).
+    - **Fourth Line:** Offer a micro-offer: "I can give you a quick quote for a [number of]-page website and list your website pages: [list of their actual website pages, comma-separated]. If there are more than 10 pages, just list the most relevant or unique ones."
+    - **Fifth Line (CTA):** Make the CTA so easy and inviting that replying feels like a favor to themselves, not to you.
+    - **Sign off as Callum.**
+    - **No opt-out language, no legal disclaimers, no generic closing lines.**
+    - **No emojis, no bullet points, no fluff.**
+    - **The email must be so specific, so relevant, and so valuable that it could only have been written for this recipient, at this moment, for this reason.**
+    - **Use British English only in the email body.**
+
+    ========================
+    DELIVERY & FORMATTING RULES
+    ========================
+    - Max 5 sentences, each short and scannable.
+    - Use white space generously.
+    - Make it feel like a handwritten note from a peer, not a mass email.
+    - If you reference a competitor, do so respectfully and only if it adds value.
+    - If you use humor, make it subtle and appropriate.
+    - If you use a compliment, make it specific and genuine.
+    - If you use a statistic, make it surprising and relevant.
+    - If you use a question, make it one that sparks curiosity and conversation.
+    - If you use a resource or micro-offer, make it relevant and valuable.
+    - The email must be so good, so specific, and so relevant that the recipient feels it was written just for them, at this moment, for this reason—and they feel compelled to open, read, and reply.
+
+    ========================
+    INPUTS
+    ========================
+    Company: {company}
+    Website: {website}
+    Keywords: {keywords}
+    Australian: {australian}
+    Sydney: {sydney}
+    City: {city}
+    State: {state}
+    Country: {country}
+
+    ========================
+    EMAIL FORMAT
+    ========================
+    Subject: <short, ultra-personalized, curiosity-driven subject that includes the company name and is absolutely impossible to ignore or not open>
+    Body:
+
+    <the full, properly formatted email body as described above, with no outline or bullet points, and no emojis, and signed off as Callum>
+    """
 
     client = openai.OpenAI(api_key=OPENAI_API_KEY)
     response = client.chat.completions.create(
@@ -502,9 +458,6 @@ Body:
         greeting = "Hey there,"
 
     body = f"{greeting}\n\n{body}"
-
-    if "stop" not in body.lower():
-        body += "\n\nIf this isn't for you, just reply STOP."
 
     body = body.replace("XYZ", "").replace("xyz", "")
 
@@ -655,6 +608,8 @@ if file:
     start = st.number_input("Start index", 0, len(df)-1, value=0)
     end = st.number_input("End index", start+1, len(df), value=min(len(df), start+10))
 
+    tone = st.selectbox("Email Tone", ["friendly", "witty", "bold", "formal"], index=0)
+
     if st.button("🚀 Start Sending Emails"):
         skipped = []
         total = end - start
@@ -679,7 +634,10 @@ if file:
             st.markdown(f"#### ✉️ Sending to {name} ({email})")
 
             try:
-                subject, body = generate_email(company, website, keywords, name)
+                city = str(row.get("city", "")).strip()
+                state = str(row.get("state", "")).strip()
+                country = str(row.get("country", "")).strip()
+                subject, body = generate_email(company, website, keywords, name, city, state, country, tone)
                 st.code(f"Subject: {subject}", language="text")
                 st.code(body, language="markdown")
 
