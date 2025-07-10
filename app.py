@@ -1,4 +1,4 @@
-# Radian Marketing Cold Email Automation
+#hy Radian Marketing Cold Email Automation
 # This script automates the process of generating and sending personalized cold emails
 
 import streamlit as st
